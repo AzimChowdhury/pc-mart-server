@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
@@ -58,6 +58,7 @@ function run() {
         const mouseCollection = client.db("pc-builder").collection("mouseCollection");
         const userCollection = client.db("pc-builder").collection("userCollection");
         const reviewCollection = client.db("pc-builder").collection("reviewCollection");
+        const orderCollection = client.db("pc-builder").collection("orderCollection");
 
 
 
@@ -136,7 +137,33 @@ function run() {
             res.send({ result, token })
         })
 
+        //post an order
+        app.post('/order/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email;
+            const name = req.body.name;
+            const configuration = req.body.configuration;
+            const total = req.body.total;
+            const order = { email, name, configuration, total }
+            const result = await orderCollection.insertOne(order)
+            res.send(result)
+        });
 
+        //get my pc
+        app.get('/myPc/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email;
+            const cursor={email:email};
+            const result= await orderCollection.find(cursor).toArray();
+            res.send(result);
+        });
+
+        //get my pc for payment
+        app.get('/payment/:id',async(req,res)=>{
+            const id=req.params.id;
+            const query = {_id:ObjectId(id)}
+            const result= await orderCollection.findOne(query)
+            res.send(result)
+            
+        })
 
 
 
