@@ -2,10 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
-const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 const app = express();
-const stripe = require('stripe')(process.env.Secret_key);
 
 
 
@@ -19,27 +17,6 @@ function run() {
     const uri = `mongodb+srv://${process.env.USER}:${process.env.PASS}@cluster0.qejbz.mongodb.net/?retryWrites=true&w=majority`;
     const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
-
-    //verify jwt token
-    function verifyJWT(req, res, next) {
-        const authHeader = req.headers.authorization;
-        if (!authHeader) {
-            return res.send({ message: 'UnAuthorized Access' })
-        }
-        if (authHeader) {
-            const token = authHeader.split(' ')[1];
-            jwt.verify(token, process.env.JWT_token, (err, decoded) => {
-                if (err) {
-                    return res.send({ message: 'forbidden access' })
-                }
-                if (decoded) {
-                    req.decoded = decoded;
-                    next()
-                }
-            })
-        }
-
-    }
 
 
 
@@ -118,86 +95,96 @@ function run() {
             res.send(result)
         });
 
-        //get all reviews
-        app.get('/reviews', async (req, res) => {
-            const result = await reviewCollection.find().toArray();
-            // console.log(result)
-            res.send(result)
-        });
+        // get a single product 
+        app.get('/details/:id', async (req, res) => {
+            const id = req.params.id;
+            try {
+                const objectId = new ObjectId(id);
 
-        //post an user
-        app.put('/user', async (req, res) => {
-            const user = req.body;
-            const filter = { email: user.email };
-            const options = { upsert: true };
-            const updateDoc = {
-                $set: { email: user.email }
+                // Get a list of all collection names in the database
+                client.db("pc-builder").listCollections().toArray((err, collections) => {
+                    if (err) {
+                        console.error('Error getting collections:', err);
+                        return res.status(500).send('Internal Server Error');
+                    }
+
+                    let results;
+
+                    const searchInCollection = (collectionName) => {
+                        client.db("pc-builder").collection(collectionName).findOne({ _id: objectId }, (err, result) => {
+                            if (err) {
+                                console.error(`Error finding document in ${collectionName}:`, err);
+                                return;
+                            }
+
+                            if (result) {
+                                // Found the document in this collection
+                                results = result
+                            }
+                        });
+                    };
+
+                    // Loop through each collection and search for the _id
+                    collections.forEach((collection) => {
+                        searchInCollection(collection.name);
+                    });
+
+                    // Wait for all searches to complete and send the results
+                    setTimeout(() => {
+                        return res.status(200).json(results);
+                    }, 5000); // Adjust the timeout if needed
+                });
+            } catch (error) {
+                console.error('Invalid _id format:', error);
+                return res.status(400).send('Invalid _id format');
             }
-            const result = await userCollection.updateOne(filter, updateDoc, options);
-            const token = jwt.sign({ email: user.email }, process.env.JWT_token, { expiresIn: '1y' })
-            res.send({ result, token })
-        })
 
-        //post an order
-        app.post('/order/:email', verifyJWT, async (req, res) => {
-            const email = req.params.email;
-            const name = req.body.name;
-            const configuration = req.body.configuration;
-            const total = req.body.total;
-            const order = { email, name, configuration, total }
-            const result = await orderCollection.insertOne(order)
-            res.send(result)
-        });
-
-        //get my pc
-        app.get('/myPc/:email', verifyJWT, async (req, res) => {
-            const email = req.params.email;
-            const cursor = { email: email };
-            const result = await orderCollection.find(cursor).toArray();
-            res.send(result);
-        });
-
-        //get my pc for payment
-        app.get('/payment/:id', async (req, res) => {
-            const id = req.params.id;
-            const query = { _id: ObjectId(id) }
-            const result = await orderCollection.findOne(query)
-            res.send(result)
-        });
-
-        // store transaction id and paid order
-        app.put('/paid-order/:id', async (req, res) => {
-            const id = req.params.id;
-            const tranxId = req.body.tranxId;
-            const query = { _id: ObjectId(id) };
-            const options = { upsert: true }
-            const updateDoc = {
-                $set: {
-                    tranxId: tranxId
-                }
-            };
-            const result = await orderCollection.updateOne(query, updateDoc, options);
-            res.send(result)
         })
 
 
-        //create payment intent
-        app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+        // featured products
+        app.get('/random', async (req, res) => {
+            const result = []
+            const cpu = await processorCollection.findOne()
+            const motherboard = await motherboardCollection.findOne()
+            const ram = await ramCollection.findOne()
+            const ssd = await ssdCollection.findOne()
+            const monitor = await monitorCollection.findOne()
+            const keyboard = await keyboardCollection.findOne()
+            const mouse = await mouseCollection.findOne()
+            const casing = await casingCollection.findOne()
+            const powerSupply = await powerSupplyCollection.findOne()
+            result.push(cpu, motherboard, ram, ssd, monitor, keyboard, mouse, casing, powerSupply)
+            res.send(result)
 
-            const { total } = req.body;
-            const amount = total * 100;
-
-            const paymentIntent = await stripe.paymentIntents.create({
-                amount: amount,
-                currency: 'usd',
-                payment_method_types: ['card']
-            });
-
-            res.send({ clientSecret: paymentIntent.client_secret })
         })
 
+        // featured category
+        app.get('/randomcategories', async (req, res) => {
+            const result = []
+            const cpu = await processorCollection.findOne()
+            cpu.redirectUrl = '/products/cpu'
+            const motherboard = await motherboardCollection.findOne()
+            motherboard.redirectUrl = '/products/motherboard'
+            const ram = await ramCollection.findOne()
+            ram.redirectUrl = '/products/ram'
+            const ssd = await ssdCollection.findOne()
+            ssd.redirectUrl = '/products/ssd'
+            const monitor = await monitorCollection.findOne()
+            monitor.redirectUrl = '/products/monitor'
+            const keyboard = await keyboardCollection.findOne()
+            keyboard.redirectUrl = '/products/keyboard'
+            const mouse = await mouseCollection.findOne()
+            mouse.redirectUrl = '/products/mouse'
+            const casing = await casingCollection.findOne()
+            casing.redirectUrl = '/products/casing'
+            const powerSuppliers = await powerSupplyCollection.findOne()
+            powerSuppliers.redirectUrl = '/products/powersupply'
 
+            result.push(cpu, motherboard, ram, ssd, monitor, keyboard, mouse, casing, powerSuppliers)
+            res.send(result)
 
+        })
 
 
     }
