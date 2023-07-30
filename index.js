@@ -159,7 +159,7 @@ function run() {
 
         })
 
-        // featured category
+        // featured category 
         app.get('/randomcategories', async (req, res) => {
             const result = []
             const cpu = await processorCollection.findOne()
