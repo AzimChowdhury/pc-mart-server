@@ -11,7 +11,7 @@ const app = express();
 app.use(cors())
 app.use(express.json())
 
-function run() {
+async function run() {
 
 
     const uri = `mongodb+srv://${process.env.USER}:${process.env.PASS}@cluster0.qejbz.mongodb.net/?retryWrites=true&w=majority`;
@@ -24,7 +24,7 @@ function run() {
 
 
     try {
-        client.connect();
+        await client.connect();
         const monitorCollection = client.db("pc-builder").collection("monitorCollection");
         const processorCollection = client.db("pc-builder").collection("processorCollection");
         const motherboardCollection = client.db("pc-builder").collection("motherboardCollection");
