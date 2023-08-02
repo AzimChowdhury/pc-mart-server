@@ -25,6 +25,7 @@ async function run() {
 
     try {
         await client.connect();
+        console.log('database connected successfully')
         const monitorCollection = client.db("pc-builder").collection("monitorCollection");
         const processorCollection = client.db("pc-builder").collection("processorCollection");
         const motherboardCollection = client.db("pc-builder").collection("motherboardCollection");
